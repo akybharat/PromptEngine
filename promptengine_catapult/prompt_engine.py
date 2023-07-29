@@ -1,6 +1,6 @@
 import os
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+#os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import openai
 import redis
 import json
@@ -171,8 +171,60 @@ class PromptEngine:
         transcript = openai.Audio.transcribe("whisper-1", audio_file)
         logging.debug("voice to text conversion successful")
         return transcript["text"]
+    
+    def feedback(self, interview_id):
+        messages = []
+        system_msg=config.FEEDBACK_PROMPT
+        json_strings = redis_prompt.lrange(interview_id, 0, - 1)
+
+        message_list = []
+        for json_string in json_strings:
+            dictionary = json.loads(json_string)
+            message_list.append(dictionary)
+
+        message_list=message_list[::-1]
+
+        system_msg+=message_list[1]['content']
+        messages.append({"role": "system", "content": system_msg})
+
+        questions = redis_prompt.lrange(interview_id+'_questions', 0, - 1)
+        answers = redis_prompt.lrange(interview_id+'_answers', 0, - 1)
+        questions=questions[::-1]
+        answers=answers[::-1]
+
+        questions_answered=questions[:len(answers)]
+        
+        df=pd.DataFrame({'Questions':questions_answered,
+                        'Answers':answers})
+        
+        result1=df.to_dict('index')
+        
+        messages.append({"role": "user", "content": str(result1)})
+
+        response = openai.ChatCompletion.create(
+            model=model_used,
+            messages=messages)
+        system_message = response["choices"][0]["message"]["content"]
+        messages.append({"role": "assistant", "content": system_message})
+        
+
+        
+        redis_prompt.set(interview_id+'_feedback', system_message)
+
+        rating= system_message.split('\n')
+        rating_line = rating[0]
+        feedback_line = rating[1]
+
+        # Extract the rating value and feedback text
+        Overall_Rating = rating_line.split(': ')[1]
+        Overall_Feedback = feedback_line.split(': ')[1]
+        
+        return {
+            'system_message': system_message,
+            'Overall Rating': Overall_Rating,
+            'Overall Feedback' : Overall_Feedback
+        }
 
 
 # TO Do:
-# Feedback function
 # redis timeout
