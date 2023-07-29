@@ -1,18 +1,21 @@
+import os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 import openai
 import redis
 import json
 import tiktoken
 import requests
 import config
-import utils
+from promptengine_catapult.utils import *
 import logging
 
 from dotenv import load_dotenv
-import os
 import io
 import openai
 from pydub import AudioSegment
-from pydub.playback import pla
+from pydub.playback import play
+
 
 # setting logging
 logging.basicConfig(
@@ -36,7 +39,7 @@ class PromptEngine:
         self.cutoff_threshold = config.CUTOFF_THRESHOLD
 
         # Set token limit based on the model used
-        self.token_limit = utils.setTokenLimit(self.model_used)
+        self.token_limit = setTokenLimit(self.model_used)
 
     def store_user_data(
         self,
@@ -91,18 +94,24 @@ class PromptEngine:
         Returns:
         - system_message (str): The generated response from the AI assistant.
         """
-
+        is_last = False
         if state == "ONGOING":
             self.redis_prompt.lpush(interview_id + "_answers", candidate_input)
             curr_dict = {"role": "user", "content": candidate_input}
             self.redis_prompt.lpush(interview_id, json.dumps(curr_dict))
 
         elif state == "END":
+            if candidate_input:
+                self.redis_prompt.lpush(interview_id + "_answers", candidate_input)
+                curr_dict = {"role": "user", "content": candidate_input}
+                self.redis_prompt.lpush(interview_id, json.dumps(curr_dict))
+
             curr_dict = {
                 "role": "user",
                 "content": 'I am done with the interview. End the interview by giving some helpful remarks and saying, "ending your interview!!!--catapult.ai"',
             }
             self.redis_prompt.lpush(interview_id, json.dumps(curr_dict))
+            is_last = True
 
         json_strings = self.redis_prompt.lrange(interview_id, 0, -1)
 
@@ -113,10 +122,10 @@ class PromptEngine:
 
         message_list = message_list[::-1]
 
-        conv_history_tokens = utils.num_tokens_from_messages(message_list)
+        conv_history_tokens = num_tokens_from_messages(message_list)
 
         if state != "END":
-            while (
+            if (
                 conv_history_tokens + self.max_response_tokens
                 >= self.token_limit * self.cutoff_threshold
             ):
@@ -125,6 +134,13 @@ class PromptEngine:
                     "content": 'I am done with the interview. End the interview by saying only, "ending your interview!!!--catapult.ai"',
                 }
                 self.redis_prompt.lpush(interview_id, json.dumps(curr_dict))
+
+                json_strings = self.redis_prompt.lrange(interview_id, 0, -1)
+                message_list = []
+                for json_string in json_strings:
+                    dictionary = json.loads(json_string)
+                    message_list.append(dictionary)
+                message_list = message_list[::-1]
 
         response = openai.ChatCompletion.create(
             model=self.model_used,
@@ -152,9 +168,10 @@ class PromptEngine:
         """
         audio_file = open(audio.file, "rb")
         transcript = openai.Audio.transcribe("whisper-1", audio_file)
+        logging.debug("voice to text conversion successful")
         return transcript["text"]
 
 
 # TO Do:
 # Feedback function
-
+# redis timeout

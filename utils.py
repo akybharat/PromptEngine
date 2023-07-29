@@ -1,5 +1,9 @@
 import openai
+import config
 from io import BytesIO
+import tiktoken
+
+model_used = config.LLM_MODEL_USED
 
 
 def voiceToText(audio):
