@@ -16,6 +16,7 @@ import io
 import openai
 from pydub import AudioSegment
 from pydub.playback import play
+import pandas as pd
 
 
 # setting logging
@@ -175,7 +176,7 @@ class PromptEngine:
     def feedback(self, interview_id):
         messages = []
         system_msg=config.FEEDBACK_PROMPT
-        json_strings = redis_prompt.lrange(interview_id, 0, - 1)
+        json_strings = self.redis_prompt.lrange(interview_id, 0, - 1)
 
         message_list = []
         for json_string in json_strings:
@@ -187,15 +188,16 @@ class PromptEngine:
         system_msg+=message_list[1]['content']
         messages.append({"role": "system", "content": system_msg})
 
-        questions = redis_prompt.lrange(interview_id+'_questions', 0, - 1)
-        answers = redis_prompt.lrange(interview_id+'_answers', 0, - 1)
+        questions = self.redis_prompt.lrange(interview_id+'_questions', 0, - 1)
+        answers = self.redis_prompt.lrange(interview_id+'_answers', 0, - 1)
         questions=questions[::-1]
         answers=answers[::-1]
 
-        questions_answered=questions[:len(answers)]
+        min_convo=min(len(answers), len(questions))
+        questions_answered=questions[:min_convo]
         
         df=pd.DataFrame({'Questions':questions_answered,
-                        'Answers':answers})
+                        'Answers':answers[:min_convo]})
         
         result1=df.to_dict('index')
         
@@ -209,7 +211,7 @@ class PromptEngine:
         
 
         
-        redis_prompt.set(interview_id+'_feedback', system_message)
+        self.redis_prompt.set(interview_id+'_feedback', system_message)
 
         rating= system_message.split('\n')
         rating_line = rating[0]

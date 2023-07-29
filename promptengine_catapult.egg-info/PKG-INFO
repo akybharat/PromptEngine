@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: promptengine-catapult
-Version: 0.1.5
+Version: 0.1.8
 Summary: PromptEngine is a Python library for conducting interview sessions using OpenAI's ChatGPT model.
 Author: Bharat Bodkhe
 Author-email: akybharat02@gmail.com
