@@ -14,9 +14,6 @@ Before using PromptEngine, make sure you have the following:
 
 - Python 3.6 or higher
 - OpenAI API key
-- .env file having following info:
-  OPENAI_API_KEY = "Your-key"
-  LOG_MODE=DEBUG
 
 ## Usage
 
